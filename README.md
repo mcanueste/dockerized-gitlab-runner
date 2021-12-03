@@ -24,6 +24,9 @@ and pulls the repository to it. Afterwards, it runs whatever command was specifi
 in the **.gitlab-ci.yml** file for that pipeline.
 
 ## What is this repository for?
+This repository might be useful if you are running a *self-hosted* **gitlab** instance,
+and want to use CI / CD feature.
+
 In order to make it even more convenient to use `gitlab-runner`, we are using the
 dockerized version for installing the **gitlab-runner**. We wrap the official
 `gilab-runner` container to add our configurations for easy usage. The runner
