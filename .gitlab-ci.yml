@@ -1,0 +1,17 @@
+image: docker:stable
+
+stages:
+  - build
+
+before_script:
+  - apk add make
+
+build-and-upload:
+  stage: build
+  only:
+  - main
+  script:
+  - make build
+  - make login user="gitlab-api-token" pass="$GLAB_API_TOKEN"
+  - make upload
+  - make clean-images

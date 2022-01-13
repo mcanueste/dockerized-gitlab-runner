@@ -7,7 +7,7 @@ specified by the user for that repository (E.g. building, testing, and deploying
 
 Gitlab provides the necessary tools for CI/CD itself, but a server
 that listens to the changes is still required. Conveniently, Gitlab also provides
-an open source tool for that, which is called [Gitlab Runner](https://gitlab.com/gitlab-org/gitlab-runner).
+an tool for that, which is called [Gitlab Runner](https://gitlab.com/gitlab-org/gitlab-runner).
 
 We need to [install the gitlab-runner](https://docs.gitlab.com/runner/install/)
 to an environment which will act as a server for Gitlab CI/CD, and [register the
@@ -37,6 +37,12 @@ After you register runners, and build the `gitlab-runner`, you can upload the co
 the container registery on gitlab. This way, you can deploy or relocate your
 runners easily by pulling the image and running it.
 
+On top of this, with the provided `.gitlab-ci.yml` file, we define a pipeline for building
+and uploading the `gitlab-runner` image into a `gitlab registery` as long as the
+the runner of the `gitlab-runner` repository is registered with the running `gitlab-running`
+instance. Well, that sounds complicated, but in essence, we are automating the build and upload of
+the `gitlab-runner` image with the `gitlab-runner` container itself.
+
 ## Prerequisites
 In order to run the Gitlab Runner, you first need to install docker. Also, in order
 to use the `make` commands you need to install `make` (usually comes installed in
@@ -51,53 +57,23 @@ Afterwards, you just need to clone the repository if you want to change the conf
 or build the runner locally.
 
 ``` shell
-git clone https://gitlab.lrz.de/commonroadwebdev/gitlab-runner.git
+git clone https://github.com/mcanueste/dockerized-gitlab-runner.git
 ```
 
 You also need to update the following variables inside the `makefile` according to your
 setup:
-- `glab_api`: The gitlab api url (e.g. gitlab.lrz.de:5005).
-- `img_name`: The image name of the `gitlab-runner`. This variable already prepends the
-    `glab_api` variable to the name. You just need to provide the *user or group name*
-    and the *repository name*.
-- `glab_host`: The gitlab host to be used when registering a runner.
-- *(Optional)* `container`: The default container name of the `gitlab-runner`.
+- `glab_host`: Full GitLab GitLab hostname, i.e. https://gitlab.lrz.de
+- `glab_api`: GitLab API URL without `http(s)`, i.e. gitlab.lrz.de
+- `namespace`: User or Group namespace on GitLab
+- `repo_name`: Repository name under the user or the group, i.e. `gitlab-runner`
 
 ## Logging into the gitlab registery
-You need to login to the gitlab registery before you can push or pull images
+You need to login to the gitlab registry before you can push or pull images
 to it. In order to login, just run the following command (assuming you modified
 the variables defined in the previous section):
 ``` shell
 make login user=USERNAME_OR_TOKEN_NAME pass=PASSWORD_OR_TOKEN
 ```
-
-## Running the gitlab-runner
-There are two ways to run the `gitlab-runner`:
-1. By cloning the repository and using `docker-compose`, or
-2. Pulling the image directly without downloading the repository
-
-In order to run the `gitlab-runner` by cloning the repository:
-
-``` shell
-git clone https://gitlab.lrz.de/commonroadwebdev/gitlab-runner.git
-cd gitlab-runner
-make run
-```
-If you want to run a different version of the runner, you can pass
-`tag=TAG` argument to the `make` command, e.g. `make run tag=latest`.
-
-In order to run the `gitlab-runner` by pulling the image directly.
-``` shell
-docker run -d \
-    --restart unless-stopped \
-    --name CONTAINER_NAME \
-    --volume /var/run/docker.sock:/var/run/docker.sock \
-    IMAGE_NAME:TAG
-```
-where `CONTAINER_NAME` is the name you want to assign to the container,
-`IMAGE_NAME` is the full name of the `gilab-runner` image (e.g.
-`gitlab.com:5005/somegroup/somerepo`), and `TAG` is the tag of
-the image you want to use.
 
 ## Building the runner container
 
@@ -147,22 +123,30 @@ After running this command a new entry will be added to the `config.toml` file.
 You need to commit these changes, and build/upload the `gitlab-runner` container
 again to make sure the changes persist.
 
-**Note-1:** You can also automate the `gitlab-runner` build/upload processes with
-the `gitlab-runner` itself. So meta, eh? :D.
-
-**Note-2:** If you want the new runner to be activated immediately, you also need
-to pull the changes on the machine the runners are serving and restart the containers.
-This can be done by running `make pull` and `make restart` command if you have cloned
-the repository (you can also specify `tag`). Otherwise you need to run:
+## Running the gitlab-runner
+You can run the `gitlab-runner` by cloning the repository and using the following command:
 ``` shell
-docker pull IMAGE_NAME:TAG
-docker rm CONTAINER_NAME
-docker run -d \
-    --restart unless-stopped \
-    --name CONTAINER_NAME \
-    --volume /var/run/docker.sock:/var/run/docker.sock \
-    IMAGE_NAME:TAG
+make run
 ```
+
+If you want to run a different version of the runner, you can pass
+`tag=TAG` argument to the `make` command, e.g. `make run tag=latest`.
+
+## Restart the gitlab-runner
+You can restart the `gitlab-runner` using the following command:
+``` shell
+make restart
+```
+
+If you want to run a different version of the runner, you can pass
+`tag=TAG` argument to the `make` command, e.g. `make restart tag=latest`.
+
+If you have added a new commit to the `gitlab-runner` repository and there
+is a new image of it on the `gitlab registery` due to the defined `CI/CD`
+pipeline, you probably want to switch to that image as well. For that,
+you have to first pull the new image (with tag if you have defined),
+using the `make pull` command. Afterwards you can run `make restart`
+normally.
 
 ## Relocating the runners
 When we start runners, Gitlab registers the runners on that machine and binds them
@@ -171,6 +155,17 @@ Gitlab will recognize the last location the runner was run as the actual locatio
 and will disregard the others. This means that in order to relocate the runners,
 we just need to run the `gitlab-runner` container on the machine we want, and it
 will be updated as the actual runner.
+
+## CI/CD of `gitlab-runner` itself
+Currently, we have a single build and upload pipeline for the `gitlab-runner` defined
+in the `.gitlab-ci.yml` file. Currently it only uses the `latest` tag for the image,
+however it can easily be extended to cover other tags or use cases. Additional information
+can be found on the [GitLab Documentation](https://docs.gitlab.com/ee/ci/quick_start/#creating-a-gitlab-ciyml-file).
+
+However, for this pipeline to work, a variable must be defined on `Settings > CI/CD > Variables`
+page with `GLAB_API_TOKEN` as key, storing the `access token` value, which can be created under
+`Settings > Access Tokens`. This is needed so the `gitlab-runner` can fetch the repository and run
+the pipeline.
 
 ## Additional Sources
 - [Advanced runner configuration documentation](https://docs.gitlab.com/runner/configuration/advanced-configuration.html)
