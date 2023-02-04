@@ -30,7 +30,7 @@ restart:
     	$(runner_img)
 
 add-runner:
-	docker run -rm \
+	docker run --rm \
 		--volume $(PWD)/config.toml:/etc/gitlab-runner/config.toml \
     	        $(runner_img) \
 		register -n \
